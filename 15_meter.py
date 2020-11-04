@@ -146,7 +146,7 @@ def main():
 
     epochs = args.epochs
     batch_size = args.batch_size
-    learning_rate = args.lr * world_size
+    learning_rate = args.lr
 
     train_dataset = datasets.MNIST('./data',
                                    train=True,

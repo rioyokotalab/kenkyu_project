@@ -84,7 +84,7 @@ def main():
 
     epochs = 10
     batch_size = 32
-    learning_rate = 1.0e-02 * world_size
+    learning_rate = 1.0e-02
 
     train_dataset = datasets.MNIST('./data',
                                    train=True,

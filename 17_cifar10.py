@@ -8,6 +8,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import time
 import os
 import wandb
+from models import *
 
 def print0(message):
     if torch.distributed.is_initialized():
@@ -15,31 +16,6 @@ def print0(message):
             print(message, flush=True)
     else:
         print(message, flush=True)
-
-class CNN(nn.Module):
-    def __init__(self):
-        super(CNN, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, 3, 1)
-        self.conv2 = nn.Conv2d(32, 64, 3, 1)
-        self.dropout1 = nn.Dropout2d(0.25)
-        self.dropout2 = nn.Dropout2d(0.5)
-        self.fc1 = nn.Linear(9216, 128)
-        self.fc2 = nn.Linear(128, 10)
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = F.relu(x)
-        x = self.conv2(x)
-        x = F.relu(x)
-        x = F.max_pool2d(x, 2)
-        x = self.dropout1(x)
-        x = torch.flatten(x, 1)
-        x = self.fc1(x)
-        x = F.relu(x)
-        x = self.dropout2(x)
-        x = self.fc2(x)
-        output = F.log_softmax(x, dim=1)
-        return output
 
 class AverageMeter(object):
     def __init__(self, name, fmt=':f'):
@@ -103,7 +79,7 @@ def train(train_loader,model,criterion,optimizer,epoch,device):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        if batch_idx % 200 == 0:
+        if batch_idx % 20 == 0:
             batch_time.update(time.perf_counter() - t)
             t = time.perf_counter()
             progress.display(batch_idx)
@@ -131,13 +107,17 @@ def validate(val_loader,model,criterion,device):
     return val_loss.avg, val_acc.avg
 
 def main():
-    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch-size', type=int, default=32, metavar='N',
-                        help='input batch size for training (default: 32)')
-    parser.add_argument('--epochs', type=int, default=10, metavar='N',
-                        help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=1.0e-02, metavar='LR',
-                        help='learning rate (default: 1.0e-02)')
+    parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Example')
+    parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+                        help='input batch size for training (default: 128)')
+    parser.add_argument('--epochs', type=int, default=200, metavar='N',
+                        help='number of epochs to train (default: 200)')
+    parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
+                        help='learning rate (default: 0.1)')
+    parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
+                        help='momentum (default: 0.9)')
+    parser.add_argument('--wd', type=float, default=5.0e-04, metavar='W',
+                        help='learning rate (default: 5.0e-04)')
     args = parser.parse_args()
 
     os.environ['MASTER_ADDR'] = 'localhost'
@@ -154,14 +134,29 @@ def main():
     epochs = args.epochs
     batch_size = args.batch_size
     learning_rate = args.lr
+    momentum = args.momentum
+    weight_decay = args.wd
 
-    train_dataset = datasets.MNIST('./data',
-                                   train=True,
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    transform_val = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    train_dataset = datasets.CIFAR10('./data',
+                                     train=True,
+                                     download=True,
+                                     transform=transform_train)
+    val_dataset = datasets.CIFAR10('./data',
+                                   train=False,
                                    download=True,
-                                   transform=transforms.ToTensor())
-    val_dataset = datasets.MNIST('./data',
-                                 train=False,
-                                 transform=transforms.ToTensor())
+                                   transform=transform_val)
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         train_dataset,
         num_replicas=torch.distributed.get_world_size(),
@@ -172,10 +167,25 @@ def main():
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
                                              batch_size=batch_size,
                                              shuffle=False)
-    model = CNN().to(device)
+    # model = VGG('VGG19')
+    # model = ResNet18()
+    # model = PreActResNet18()
+    # model = GoogLeNet()
+    # model = DenseNet121()
+    # model = ResNeXt29_2x64d()
+    # model = MobileNet()
+    # model = MobileNetV2()
+    # model = DPN92()
+    # model = ShuffleNetG2()
+    # model = SENet18()
+    # model = ShuffleNetV2(1)
+    # model = EfficientNetB0()
+    # model = RegNetX_200MF()
+    model = VGG('VGG19').to(device)
     model = DDP(model, device_ids=[rank])
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate,
+            momentum=momentum, weight_decay=weight_decay)
 
     for epoch in range(epochs):
         model.train()
