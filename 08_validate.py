@@ -53,17 +53,18 @@ optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
 def validate():
     model.eval()
-    val_loss, correct = 0, 0
+    val_loss, val_acc = 0, 0
     for data, target in val_loader:
         output = model(data)
-        val_loss += criterion(output, target).data.item()
-        pred = output.data.max(1)[1] # get the index of the max log-probability
-        correct += pred.eq(target.data).cpu().sum()
+        loss = criterion(output, target)
+        val_loss += loss.item()
+        pred = output.data.max(1)[1]
+        val_acc += 100. * pred.eq(target.data).cpu().sum() / target.size(0)
 
     val_loss /= len(val_loader)
-    val_acc = 100. * correct.to(torch.float32) / len(val_loader.dataset)
-    print('\nValidation set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        val_loss, correct, len(val_loader.dataset), val_acc))
+    val_acc /= len(val_loader)
+    print('\nValidation set: Average loss: {:.4f}, Accuracy: {:.1f}%\n'.format(
+        val_loss, val_acc))
 
 for epoch in range(epochs):
     # Set model to training mode

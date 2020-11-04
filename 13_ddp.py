@@ -59,19 +59,20 @@ def train(train_loader,model,criterion,optimizer,epoch,device):
 
 def validate(val_loader,model,criterion,device):
     model.eval()
-    val_loss, correct = 0, 0
+    val_loss, val_acc = 0, 0
     for data, target in val_loader:
         data = data.to(device)
         target = target.to(device)
         output = model(data)
-        val_loss += criterion(output, target).data.item()
+        loss = criterion(output, target)
+        val_loss += loss.item()
         pred = output.data.max(1)[1]
-        correct += pred.eq(target.data).cpu().sum()
+        val_acc += 100. * pred.eq(target.data).cpu().sum() / target.size(0)
 
     val_loss /= len(val_loader)
-    val_acc = 100. * correct.to(torch.float32) / len(val_loader.dataset)
-    print0('\nValidation set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        val_loss, correct, len(val_loader.dataset), val_acc))
+    val_acc /= len(val_loader)
+    print0('\nValidation set: Average loss: {:.4f}, Accuracy: {:.1f}%\n'.format(
+        val_loss, val_acc))
 
 def main():
     os.environ['MASTER_ADDR'] = 'localhost'
