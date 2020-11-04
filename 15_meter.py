@@ -83,9 +83,10 @@ class ProgressMeter(object):
 def train(train_loader,model,criterion,optimizer,epoch,device):
     batch_time = AverageMeter('Time', ':.4f')
     train_loss = AverageMeter('Loss', ':.6f')
+    train_acc = AverageMeter('Accuracy', ':.6f')
     progress = ProgressMeter(
         len(train_loader),
-        [train_loss, batch_time],
+        [train_loss, train_acc, batch_time],
         prefix="Epoch: [{}]".format(epoch))
     model.train()
     t = time.perf_counter()
@@ -95,6 +96,9 @@ def train(train_loader,model,criterion,optimizer,epoch,device):
         output = model(data)
         loss = criterion(output, target)
         train_loss.update(loss.item(), data.size(0))
+        pred = output.data.max(1)[1]
+        acc = 100. * pred.eq(target.data).cpu().sum() / target.size(0)
+        train_acc.update(acc, data.size(0))
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
