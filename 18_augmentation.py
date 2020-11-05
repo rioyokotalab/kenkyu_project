@@ -108,10 +108,10 @@ def validate(val_loader,model,criterion,device):
 
 def main():
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Example')
-    parser.add_argument('--batch-size', type=int, default=64, metavar='N',
-                        help='input batch size for training (default: 64)')
-    parser.add_argument('--epochs', type=int, default=100, metavar='N',
-                        help='number of epochs to train (default: 100)')
+    parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+                        help='input batch size for training (default: 128)')
+    parser.add_argument('--epochs', type=int, default=200, metavar='N',
+                        help='number of epochs to train (default: 200)')
     parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
                         help='learning rate (default: 0.1)')
     args = parser.parse_args()
@@ -121,7 +121,7 @@ def main():
     rank = int(os.getenv('OMPI_COMM_WORLD_RANK', '0'))
     world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', '1'))
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
-    device = torch.device('cuda',rank % 4)
+    device = torch.device('cuda',rank)
 
     if torch.distributed.get_rank() == 0:
         wandb.init(project="example-project")
@@ -130,15 +130,29 @@ def main():
     epochs = args.epochs
     batch_size = args.batch_size
     learning_rate = args.lr
+    momentum = args.momentum
+    weight_decay = args.wd
+
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    transform_val = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
 
     train_dataset = datasets.CIFAR10('./data',
                                      train=True,
                                      download=True,
-                                     transform=transforms.ToTensor())
+                                     transform=transform_train)
     val_dataset = datasets.CIFAR10('./data',
                                    train=False,
                                    download=True,
-                                   transform=transforms.ToTensor())
+                                   transform=transform_val)
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         train_dataset,
         num_replicas=torch.distributed.get_world_size(),
@@ -164,7 +178,7 @@ def main():
     # model = EfficientNetB0()
     # model = RegNetX_200MF()
     model = VGG('VGG19').to(device)
-    model = DDP(model, device_ids=[rank % 4])
+    model = DDP(model, device_ids=[rank])
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
