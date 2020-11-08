@@ -166,14 +166,14 @@ def main():
                                              batch_size=batch_size,
                                              shuffle=False)
     model = CNN().to(device)
-    model = DDP(model, device_ids=[rank])
+    ddp_model = DDP(model, device_ids=[rank])
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.SGD(ddp_model.parameters(), lr=learning_rate)
 
     for epoch in range(epochs):
-        model.train()
-        train(train_loader,model,criterion,optimizer,epoch,device)
-        validate(val_loader,model,criterion,device)
+        ddp_model.train()
+        train(train_loader,ddp_model,criterion,optimizer,epoch,device)
+        validate(val_loader,ddp_model,criterion,device)
 
     dist.destroy_process_group()
 

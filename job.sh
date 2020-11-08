@@ -15,4 +15,4 @@ source /etc/profile.d/modules.sh
 module load cuda cudnn openmpi nccl
 
 # Run
-mpirun -np 4 python 17_cifar10.py
+mpirun -np 4 python 19_regularization.py 

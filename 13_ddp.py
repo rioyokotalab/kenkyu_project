@@ -39,7 +39,7 @@ class CNN(nn.Module):
         output = F.log_softmax(x, dim=1)
         return output
 
-def train(train_loader,model,criterion,optimizer,epoch,device):
+def train(train_loader,model,criterion,optimizer,epoch,device,world_size):
     model.train()
     t = time.perf_counter()
     for batch_idx, (data, target) in enumerate(train_loader):
@@ -52,7 +52,7 @@ def train(train_loader,model,criterion,optimizer,epoch,device):
         optimizer.step()
         if batch_idx % 200 == 0:
             print0('Train Epoch: {} [{:>5}/{} ({:.0%})]\tLoss: {:.6f}\t Time:{:.4f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
+                epoch, batch_idx * len(data) * world_size, len(train_loader.dataset),
                 batch_idx / len(train_loader), loss.data.item(),
                 time.perf_counter() - t))
             t = time.perf_counter()
@@ -104,14 +104,14 @@ def main():
                                              batch_size=batch_size,
                                              shuffle=False)
     model = CNN().to(device)
-    model = DDP(model, device_ids=[rank])
+    ddp_model = DDP(model, device_ids=[rank])
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.SGD(ddp_model.parameters(), lr=learning_rate)
 
     for epoch in range(epochs):
-        model.train()
-        train(train_loader,model,criterion,optimizer,epoch,device)
-        validate(val_loader,model,criterion,device)
+        ddp_model.train()
+        train(train_loader,ddp_model,criterion,optimizer,epoch,device,world_size)
+        validate(val_loader,ddp_model,criterion,device)
 
     dist.destroy_process_group()
 

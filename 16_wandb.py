@@ -147,10 +147,6 @@ def main():
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
     device = torch.device('cuda',rank)
 
-    if torch.distributed.get_rank() == 0:
-        wandb.init(project="example-project")
-        wandb.config.update(args)
-
     epochs = args.epochs
     batch_size = args.batch_size
     learning_rate = args.lr
@@ -173,14 +169,19 @@ def main():
                                              batch_size=batch_size,
                                              shuffle=False)
     model = CNN().to(device)
-    model = DDP(model, device_ids=[rank])
+    ddp_model = DDP(model, device_ids=[rank])
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.SGD(ddp_model.parameters(), lr=learning_rate)
+
+    if torch.distributed.get_rank() == 0:
+        wandb.init(project="example-project")
+        wandb.config.update(args)
+        wandb.config.update({"model": model.__class__.__name__, "dataset": "MNIST"})
 
     for epoch in range(epochs):
-        model.train()
-        train_loss, train_acc = train(train_loader,model,criterion,optimizer,epoch,device)
-        val_loss, val_acc = validate(val_loader,model,criterion,device)
+        ddp_model.train()
+        train_loss, train_acc = train(train_loader,ddp_model,criterion,optimizer,epoch,device)
+        val_loss, val_acc = validate(val_loader,ddp_model,criterion,device)
         if torch.distributed.get_rank() == 0:
             wandb.log({
                 'train_loss': train_loss,
