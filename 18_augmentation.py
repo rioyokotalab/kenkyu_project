@@ -184,13 +184,12 @@ def main():
         model.train()
         train_loss, train_acc = train(train_loader,model,criterion,optimizer,epoch,device)
         val_loss, val_acc = validate(val_loader,model,criterion,device)
-        if dist.get_rank() == 0:
-            wandb.log({
-                'train_loss': train_loss,
-                'train_acc': train_acc,
-                'val_loss': val_loss,
-                'val_acc': val_acc
-                })
+        wandb.log({
+            'train_loss': train_loss,
+            'train_acc': train_acc,
+            'val_loss': val_loss,
+            'val_acc': val_acc
+            })
 
     dist.destroy_process_group()
 

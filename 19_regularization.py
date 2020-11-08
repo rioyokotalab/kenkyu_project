@@ -179,6 +179,7 @@ def main():
     # model = EfficientNetB0()
     # model = RegNetX_200MF()
     model = VGG('VGG19').to(device)
+    wandb.config.update({"model": model.__class__.__name__, "dataset": "CIFAR10"})
     model = DDP(model, device_ids=[rank])
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=config.lr,
@@ -188,13 +189,12 @@ def main():
         model.train()
         train_loss, train_acc = train(train_loader,model,criterion,optimizer,epoch,device)
         val_loss, val_acc = validate(val_loader,model,criterion,device)
-        if dist.get_rank() == 0:
-            wandb.log({
-                'train_loss': train_loss,
-                'train_acc': train_acc,
-                'val_loss': val_loss,
-                'val_acc': val_acc
-                })
+        wandb.log({
+            'train_loss': train_loss,
+            'train_acc': train_acc,
+            'val_loss': val_loss,
+            'val_acc': val_acc
+            })
 
     dist.destroy_process_group()
 
