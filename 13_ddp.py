@@ -8,8 +8,8 @@ import time
 import os
 
 def print0(message):
-    if torch.distributed.is_initialized():
-        if torch.distributed.get_rank() == 0:
+    if dist.is_initialized():
+        if dist.get_rank() == 0:
             print(message, flush=True)
     else:
         print(message, flush=True)
@@ -95,8 +95,8 @@ def main():
                                  transform=transforms.ToTensor())
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         train_dataset,
-        num_replicas=torch.distributed.get_world_size(),
-        rank=torch.distributed.get_rank())
+        num_replicas=dist.get_world_size(),
+        rank=dist.get_rank())
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
                                                batch_size=batch_size,
                                                sampler=train_sampler)
@@ -104,14 +104,14 @@ def main():
                                              batch_size=batch_size,
                                              shuffle=False)
     model = CNN().to(device)
-    ddp_model = DDP(model, device_ids=[rank])
+    model = DDP(model, device_ids=[rank])
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(ddp_model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
     for epoch in range(epochs):
-        ddp_model.train()
-        train(train_loader,ddp_model,criterion,optimizer,epoch,device,world_size)
-        validate(val_loader,ddp_model,criterion,device)
+        model.train()
+        train(train_loader,model,criterion,optimizer,epoch,device,world_size)
+        validate(val_loader,model,criterion,device)
 
     dist.destroy_process_group()
 

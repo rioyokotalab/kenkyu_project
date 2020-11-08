@@ -10,8 +10,8 @@ import os
 import wandb
 
 def print0(message):
-    if torch.distributed.is_initialized():
-        if torch.distributed.get_rank() == 0:
+    if dist.is_initialized():
+        if dist.get_rank() == 0:
             print(message, flush=True)
     else:
         print(message, flush=True)
@@ -132,11 +132,11 @@ def validate(val_loader,model,criterion,device):
 
 def main():
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch-size', type=int, default=32, metavar='N',
+    parser.add_argument('--bs', '--batch_size', type=int, default=32, metavar='N',
                         help='input batch size for training (default: 32)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
                         help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=1.0e-02, metavar='LR',
+    parser.add_argument('--lr', '--learning_rate', type=float, default=1.0e-02, metavar='LR',
                         help='learning rate (default: 1.0e-02)')
     args = parser.parse_args()
 
@@ -147,9 +147,12 @@ def main():
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
     device = torch.device('cuda',rank)
 
-    epochs = args.epochs
-    batch_size = args.batch_size
-    learning_rate = args.lr
+    if rank!=0:
+        os.environ['WANDB_MODE'] = 'dryrun'
+        os.environ['WANDB_SILENT'] = 'true'
+    wandb.init(project="example-project")
+    wandb.config.update(args)
+    config = wandb.config
 
     train_dataset = datasets.MNIST('./data',
                                    train=True,
@@ -160,35 +163,30 @@ def main():
                                  transform=transforms.ToTensor())
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         train_dataset,
-        num_replicas=torch.distributed.get_world_size(),
-        rank=torch.distributed.get_rank())
+        num_replicas=dist.get_world_size(),
+        rank=dist.get_rank())
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                               batch_size=batch_size,
+                                               batch_size=config.bs,
                                                sampler=train_sampler)
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
-                                             batch_size=batch_size,
+                                             batch_size=config.bs,
                                              shuffle=False)
     model = CNN().to(device)
-    ddp_model = DDP(model, device_ids=[rank])
+    wandb.config.update({"model": model.__class__.__name__, "dataset": "MNIST"})
+    model = DDP(model, device_ids=[rank])
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(ddp_model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.SGD(model.parameters(), lr=config.lr)
 
-    if torch.distributed.get_rank() == 0:
-        wandb.init(project="example-project")
-        wandb.config.update(args)
-        wandb.config.update({"model": model.__class__.__name__, "dataset": "MNIST"})
-
-    for epoch in range(epochs):
-        ddp_model.train()
-        train_loss, train_acc = train(train_loader,ddp_model,criterion,optimizer,epoch,device)
-        val_loss, val_acc = validate(val_loader,ddp_model,criterion,device)
-        if torch.distributed.get_rank() == 0:
-            wandb.log({
-                'train_loss': train_loss,
-                'train_acc': train_acc,
-                'val_loss': val_loss,
-                'val_acc': val_acc
-                })
+    for epoch in range(config.epochs):
+        model.train()
+        train_loss, train_acc = train(train_loader,model,criterion,optimizer,epoch,device)
+        val_loss, val_acc = validate(val_loader,model,criterion,device)
+        wandb.log({
+            'train_loss': train_loss,
+            'train_acc': train_acc,
+            'val_loss': val_loss,
+            'val_acc': val_acc
+            })
 
     dist.destroy_process_group()
 

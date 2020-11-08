@@ -1,19 +1,10 @@
 import argparse
 import torch
-import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import datasets, transforms
-from torch.nn.parallel import DistributedDataParallel as DDP
 import time
-import os
-
-def print0(message):
-    if dist.is_initialized():
-        if dist.get_rank() == 0:
-            print(message, flush=True)
-    else:
-        print(message, flush=True)
+import wandb
 
 class CNN(nn.Module):
     def __init__(self):
@@ -40,7 +31,7 @@ class CNN(nn.Module):
         output = F.log_softmax(x, dim=1)
         return output
 
-def train(train_loader,model,criterion,optimizer,epoch,device,world_size):
+def train(train_loader,model,criterion,optimizer,epoch,device):
     model.train()
     t = time.perf_counter()
     for batch_idx, (data, target) in enumerate(train_loader):
@@ -52,8 +43,8 @@ def train(train_loader,model,criterion,optimizer,epoch,device,world_size):
         loss.backward()
         optimizer.step()
         if batch_idx % 200 == 0:
-            print0('Train Epoch: {} [{:>5}/{} ({:.0%})]\tLoss: {:.6f}\t Time:{:.4f}'.format(
-                epoch, batch_idx * len(data) * world_size, len(train_loader.dataset),
+            print('Train Epoch: {} [{:>5}/{} ({:.0%})]\tLoss: {:.6f}\t Time:{:.4f}'.format(
+                epoch, batch_idx * len(data), len(train_loader.dataset),
                 batch_idx / len(train_loader), loss.data.item(),
                 time.perf_counter() - t))
             t = time.perf_counter()
@@ -72,8 +63,9 @@ def validate(val_loader,model,criterion,device):
 
     val_loss /= len(val_loader)
     val_acc /= len(val_loader)
-    print0('\nValidation set: Average loss: {:.4f}, Accuracy: {:.1f}%\n'.format(
+    print('\nValidation set: Average loss: {:.4f}, Accuracy: {:.1f}%\n'.format(
         val_loss, val_acc))
+    return val_loss, val_acc
 
 def main():
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
@@ -85,16 +77,9 @@ def main():
                         help='learning rate (default: 1.0e-02)')
     args = parser.parse_args()
 
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '8888'
-    rank = int(os.getenv('OMPI_COMM_WORLD_RANK', '0'))
-    world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', '1'))
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
-    device = torch.device('cuda',rank)
-
-    epochs = args.epochs
-    batch_size = args.bs
-    learning_rate = args.lr
+    wandb.init(project="example-project")
+    wandb.config.update(args)
+    config = wandb.config
 
     train_dataset = datasets.MNIST('./data',
                                    train=True,
@@ -103,27 +88,25 @@ def main():
     val_dataset = datasets.MNIST('./data',
                                  train=False,
                                  transform=transforms.ToTensor())
-    train_sampler = torch.utils.data.distributed.DistributedSampler(
-        train_dataset,
-        num_replicas=dist.get_world_size(),
-        rank=dist.get_rank())
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                               batch_size=batch_size,
-                                               sampler=train_sampler)
+                                               batch_size=config.batch_size,
+                                               shuffle=True)
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
-                                             batch_size=batch_size,
+                                             batch_size=config.batch_size,
                                              shuffle=False)
+    device = torch.device("cuda")
     model = CNN().to(device)
-    model = DDP(model, device_ids=[rank])
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.SGD(model.parameters(), lr=config.learning_rate)
 
-    for epoch in range(epochs):
+    for epoch in range(config.epochs):
         model.train()
-        train(train_loader,model,criterion,optimizer,epoch,device,world_size)
-        validate(val_loader,model,criterion,device)
-
-    dist.destroy_process_group()
+        train(train_loader,model,criterion,optimizer,epoch,device)
+        val_loss, val_acc = validate(val_loader,model,criterion,device)
+        wandb.log({
+                'val_loss': val_loss,
+                'val_acc': val_acc
+                })
 
 if __name__ == '__main__':
     main()

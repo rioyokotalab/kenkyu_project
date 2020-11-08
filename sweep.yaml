@@ -1,0 +1,16 @@
+program: 19_regularization.py
+method: grid
+matric:
+  goal: minimize
+  name: val_loss
+parameters:
+  epochs:
+    values: [10]
+  batch_size:
+    values: [32]
+  learning_rate:
+    values: [0.01, 0.02]
+  momentum:
+    values: [0.9]
+  weight_decay:
+    values: [5.0e-4, 1.0e-3]
