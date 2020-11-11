@@ -138,7 +138,6 @@ def main():
                                      transform=transforms.ToTensor())
     val_dataset = datasets.CIFAR10('./data',
                                    train=False,
-                                   download=True,
                                    transform=transforms.ToTensor())
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         train_dataset,

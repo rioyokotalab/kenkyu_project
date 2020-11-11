@@ -150,7 +150,6 @@ def main():
                                      transform=transform_train)
     val_dataset = datasets.CIFAR10('./data',
                                    train=False,
-                                   download=True,
                                    transform=transform_val)
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         train_dataset,
