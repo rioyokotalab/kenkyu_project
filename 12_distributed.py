@@ -2,12 +2,13 @@ import os
 import torch
 import torch.distributed as dist
 
-os.environ['MASTER_ADDR'] = 'localhost'
-os.environ['MASTER_PORT'] = '8888'
+master_addr = os.getenv("MASTER_ADDR", default="localhost")
+master_port = os.getenv('MASTER_POST', default='8888')
+method = "tcp://{}:{}".format(master_addr, master_port)
 rank = int(os.getenv('OMPI_COMM_WORLD_RANK', '0'))
 world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', '1'))
-dist.init_process_group("nccl", rank=rank, world_size=world_size)
-print('Rank: {}, Size: {}'.format(torch.distributed.get_rank(),torch.distributed.get_world_size()))
+dist.init_process_group("nccl", init_method=method, rank=rank, world_size=world_size)
+print('Rank: {}, Size: {}, Host: {}'.format(dist.get_rank(), dist.get_world_size(), master_addr))
 
 ngpus = 4
 device = rank % ngpus
@@ -15,3 +16,4 @@ x = torch.randn(1).to(device)
 print('rank {}: {}'.format(rank, x))
 dist.broadcast(x, src=0)
 print('rank {}: {}'.format(rank, x))
+dist.destroy_process_group()
