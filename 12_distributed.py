@@ -10,7 +10,7 @@ world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', '1'))
 dist.init_process_group("nccl", init_method=method, rank=rank, world_size=world_size)
 print('Rank: {}, Size: {}, Host: {}'.format(dist.get_rank(), dist.get_world_size(), master_addr))
 
-ngpus = 4
+ngpus = torch.cuda.device_count()
 device = rank % ngpus
 x = torch.randn(1).to(device)
 print('rank {}: {}'.format(rank, x))
