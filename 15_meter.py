@@ -137,12 +137,14 @@ def main():
                         help='learning rate (default: 1.0e-02)')
     args = parser.parse_args()
 
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '8888'
+    master_addr = os.getenv("MASTER_ADDR", default="localhost")
+    master_port = os.getenv('MASTER_POST', default='8888')
+    method = "tcp://{}:{}".format(master_addr, master_port)
     rank = int(os.getenv('OMPI_COMM_WORLD_RANK', '0'))
     world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', '1'))
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
-    device = torch.device('cuda',rank)
+    dist.init_process_group("nccl", init_method=method, rank=rank, world_size=world_size)
+    ngpus = torch.cuda.device_count()
+    device = torch.device('cuda',rank % ngpus)
 
     epochs = args.epochs
     batch_size = args.bs
@@ -166,7 +168,7 @@ def main():
                                              batch_size=batch_size,
                                              shuffle=False)
     model = CNN().to(device)
-    model = DDP(model, device_ids=[rank])
+    model = DDP(model, device_ids=[rank % ngpus])
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
