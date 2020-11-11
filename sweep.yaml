@@ -1,16 +1,16 @@
-program: 19_regularization.py
+program: wrapper.py
 method: grid
 metric:
   goal: minimize
   name: val_loss
 parameters:
   epochs:
-    values: [100]
+    values: [1]
   batch_size:
     values: [32]
   learning_rate:
-    values: [0.005, 0.01, 0.02, 0.05, 0.1]
+    values: [0.01]
   momentum:
-    values: [0.85, 0.9, 0.95]
+    values: [0.9]
   weight_decay:
-    values: [1.0e-4, 2.0e-4, 5.0e-4, 1.0e-3, 2.0e-3]
+    values: [5.0e-4]

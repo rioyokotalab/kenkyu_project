@@ -149,12 +149,9 @@ def main():
     ngpus = torch.cuda.device_count()
     device = torch.device('cuda',rank % ngpus)
 
-    if rank!=0:
-        os.environ['WANDB_MODE'] = 'dryrun'
-        os.environ['WANDB_SILENT'] = 'true'
-    wandb.init(project="example-project")
-    wandb.config.update(args)
-    config = wandb.config
+    if rank==0:
+        wandb.init()
+        wandb.config.update(args)
 
     train_dataset = datasets.MNIST('./data',
                                    train=True,
@@ -168,27 +165,29 @@ def main():
         num_replicas=dist.get_world_size(),
         rank=dist.get_rank())
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                               batch_size=config.bs,
+                                               batch_size=args.bs,
                                                sampler=train_sampler)
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
-                                             batch_size=config.bs,
+                                             batch_size=args.bs,
                                              shuffle=False)
     model = CNN().to(device)
-    wandb.config.update({"model": model.__class__.__name__, "dataset": "MNIST"})
+    if rank==0:
+        wandb.config.update({"model": model.__class__.__name__, "dataset": "MNIST"})
     model = DDP(model, device_ids=[rank % ngpus])
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=config.lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr)
 
-    for epoch in range(config.epochs):
+    for epoch in range(args.epochs):
         model.train()
         train_loss, train_acc = train(train_loader,model,criterion,optimizer,epoch,device)
         val_loss, val_acc = validate(val_loader,model,criterion,device)
-        wandb.log({
-            'train_loss': train_loss,
-            'train_acc': train_acc,
-            'val_loss': val_loss,
-            'val_acc': val_acc
-            })
+        if rank==0:
+            wandb.log({
+                'train_loss': train_loss,
+                'train_acc': train_acc,
+                'val_loss': val_loss,
+                'val_acc': val_acc
+                })
 
     dist.destroy_process_group()
 
