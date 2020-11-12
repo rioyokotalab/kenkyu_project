@@ -5,6 +5,11 @@
 #$ -j y
 #$ -o output/o.$JOB_ID
 
-# Run
-source ~/.bash_profile
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
+eval "$(pyenv virtualenv-init -)"
+
+. /etc/profile.d/modules.sh
+module load cuda openmpi nccl cudnn
 $1

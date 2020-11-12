@@ -11,7 +11,7 @@ qstat
 #### Modules
 echo '' >> ~/.bashrc
 echo '# Modules' >> ~/.bashrc
-echo '. /etc/profile.d/modules.sh' >> ~/.bashrc
+echo 'source /etc/profile.d/modules.sh' >> ~/.bashrc
 echo 'module load cuda openmpi nccl cudnn' >> ~/.bashrc
 source ~/.bashrc
 
