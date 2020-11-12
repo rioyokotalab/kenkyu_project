@@ -8,4 +8,3 @@
 # Run
 source ~/.bash_profile
 $1
-#wandb agent rioyokotalab/kenkyu_project/hk4dsp54
