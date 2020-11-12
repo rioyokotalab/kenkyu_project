@@ -4,6 +4,7 @@
 qrsh -g tga-hpc-lecture -l f_node=2 -l h_rt=1:30:00 -ar 予約番号
 #### Job schedule
 qsub -g tga-hpc-lecture job.sh "python 00_numpy.py"
+qsub -g tga-hpc-lecture job.sh "mpirun -np 4 python 19_regularization.py"
 #### Job monitor (r: 実行中, qw: 順番待ち)
 qstat
 
