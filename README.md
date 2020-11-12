@@ -23,9 +23,6 @@ source ~/.bash_profile
 pyenv install 3.8.6
 pyenv virtualenv 3.8.6 pytorch
 
-#### WandB
-wandb login
-
 ### Code
 #### Clone
 git clone https://github..com/rioyokotalab/kenkyu_project
@@ -38,3 +35,7 @@ python 00_numpy.py
 mpirun -npernode 4 -np 8 python 12_distributed.py
 #### Update code
 git pull
+#### WandB
+wandb login
+#### Sweep
+wandb sweep sweep.yaml
