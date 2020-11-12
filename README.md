@@ -8,6 +8,8 @@ qsub -g tga-hpc-lecture job.sh "mpirun -np 4 python 19_regularization.py"
 qsub -g tga-hpc-lecture job.sh "wandb agent rioyokotalab/kenkyu_project/ux2akgap"
 #### Job monitor (r: 実行中, qw: 順番待ち)
 qstat
+#### Job delete
+qdel ジョブID
 
 #### Modules
 echo '' >> ~/.bashrc
