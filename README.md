@@ -1,7 +1,7 @@
 # kenkyu_project
 ### TSUBAME setup
 #### Interactive node
-qrsh -g tga-hpc-lecture -l f_node=2 -l h_rt=1:30:00 -ar 予約番号
+qrsh -g tga-hpc-lecture -l f_node=1 -l h_rt=0:50:00 -ar 予約番号
 #### Job schedule
 qsub -g tga-hpc-lecture job.sh "python 00_numpy.py"
 qsub -g tga-hpc-lecture job.sh "mpirun -np 4 python 19_regularization.py"
