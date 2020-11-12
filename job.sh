@@ -10,6 +10,6 @@ export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
 eval "$(pyenv virtualenv-init -)"
 
-. /etc/profile.d/modules.sh
+source /etc/profile.d/modules.sh
 module load cuda openmpi nccl cudnn
 $1
