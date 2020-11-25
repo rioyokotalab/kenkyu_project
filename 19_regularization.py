@@ -171,10 +171,8 @@ def main():
     # model = MobileNet().to(device)
     # model = MobileNetV2().to(device)
     # model = DPN92().to(device)
-    # model = ShuffleNetG2().to(device)
     # model = SENet18().to(device)
     # model = ShuffleNetV2(1).to(device)
-    # model = EfficientNetB0().to(device)
     # model = RegNetX_200MF().to(device)
     if rank==0:
         wandb.config.update({"model": model.__class__.__name__, "dataset": "CIFAR10"})
