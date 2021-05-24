@@ -141,7 +141,7 @@ def main():
     args = parser.parse_args()
 
     master_addr = os.getenv("MASTER_ADDR", default="localhost")
-    master_port = os.getenv('MASTER_POST', default='8888')
+    master_port = os.getenv('MASTER_PORT', default='8888')
     method = "tcp://{}:{}".format(master_addr, master_port)
     rank = int(os.getenv('OMPI_COMM_WORLD_RANK', '0'))
     world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', '1'))
