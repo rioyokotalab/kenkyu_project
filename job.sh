@@ -13,4 +13,4 @@ eval "$(pyenv virtualenv-init -)"
 
 source /etc/profile.d/modules.sh
 module load cuda openmpi nccl cudnn
-$1
+wandb agent $1
