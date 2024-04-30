@@ -1,6 +1,6 @@
 #!/bin/bash 
 #$ -cwd
-#$ -l f_node=1
+#$ -l node_f=1
 #$ -l h_rt=1:00:00
 #$ -j y
 #$ -o output/o.$JOB_ID
@@ -11,6 +11,5 @@ eval "$(pyenv init --path)"
 eval "$(pyenv init -)"
 eval "$(pyenv virtualenv-init -)"
 
-source /etc/profile.d/modules.sh
-module load cuda openmpi nccl cudnn
+module load nvhpc nccl
 wandb agent $1
