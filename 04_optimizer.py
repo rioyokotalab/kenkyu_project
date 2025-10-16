@@ -1,4 +1,18 @@
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class TwoLayerNet(nn.Module):
+    def __init__(self, D_in, H, D_out):
+        super(TwoLayerNet, self).__init__()
+        self.fc1 = nn.Linear(D_in, H)
+        self.fc2 = nn.Linear(H, D_out)
+
+    def forward(self, x):
+        h = self.fc1(x)
+        h_r = F.relu(h)
+        y_p = self.fc2(h_r)
+        return y_p
 
 epochs = 300
 batch_size = 32
@@ -12,11 +26,7 @@ x = torch.randn(batch_size, D_in)
 y = torch.randn(batch_size, D_out)
 
 # define model
-model = torch.nn.Sequential(
-        torch.nn.Linear(D_in, H),
-        torch.nn.ReLU(),
-        torch.nn.Linear(H, D_out),
-        )
+model = TwoLayerNet(D_in, H, D_out)
 
 # define loss function
 criterion = torch.nn.MSELoss(reduction='sum')

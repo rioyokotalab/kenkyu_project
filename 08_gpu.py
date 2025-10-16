@@ -9,8 +9,8 @@ class CNN(nn.Module):
         super(CNN, self).__init__()
         self.conv1 = nn.Conv2d(1, 32, 3, 1)
         self.conv2 = nn.Conv2d(32, 64, 3, 1)
-        self.dropout1 = nn.Dropout2d(0.25)
-        self.dropout2 = nn.Dropout2d(0.5)
+        self.dropout1 = nn.Dropout(0.25)
+        self.dropout2 = nn.Dropout(0.5)
         self.fc1 = nn.Linear(9216, 128)
         self.fc2 = nn.Linear(128, 10)
 
@@ -29,10 +29,12 @@ class CNN(nn.Module):
         output = F.log_softmax(x, dim=1)
         return output
 
-def train(train_loader,model,criterion,optimizer,epoch):
+def train(train_loader,model,criterion,optimizer,epoch,device):
     model.train()
     t = time.perf_counter()
     for batch_idx, (data, target) in enumerate(train_loader):
+        data = data.to(device)
+        target = target.to(device)
         output = model(data)
         loss = criterion(output, target)
         optimizer.zero_grad()
@@ -45,10 +47,12 @@ def train(train_loader,model,criterion,optimizer,epoch):
                 time.perf_counter() - t))
             t = time.perf_counter()
 
-def validate(val_loader,model,criterion):
+def validate(val_loader,model,criterion,device):
     model.eval()
     val_loss, val_acc = 0, 0
     for data, target in val_loader:
+        data = data.to(device)
+        target = target.to(device)
         output = model(data)
         loss = criterion(output, target)
         val_loss += loss.item()
@@ -78,15 +82,15 @@ def main():
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
                                              batch_size=batch_size,
                                              shuffle=False)
-
-    model = CNN()
+    device = torch.device("cuda")
+    model = CNN().to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
     for epoch in range(epochs):
         model.train()
-        train(train_loader,model,criterion,optimizer,epoch)
-        validate(val_loader,model,criterion)
+        train(train_loader,model,criterion,optimizer,epoch,device)
+        validate(val_loader,model,criterion,device)
 
 if __name__ == '__main__':
     main()

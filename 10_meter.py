@@ -7,7 +7,6 @@ from torchvision import datasets, transforms
 from torch.nn.parallel import DistributedDataParallel as DDP
 import time
 import os
-import wandb
 
 def print0(message):
     if dist.is_initialized():
@@ -21,8 +20,8 @@ class CNN(nn.Module):
         super(CNN, self).__init__()
         self.conv1 = nn.Conv2d(1, 32, 3, 1)
         self.conv2 = nn.Conv2d(32, 64, 3, 1)
-        self.dropout1 = nn.Dropout2d(0.25)
-        self.dropout2 = nn.Dropout2d(0.5)
+        self.dropout1 = nn.Dropout(0.25)
+        self.dropout2 = nn.Dropout(0.5)
         self.fc1 = nn.Linear(9216, 128)
         self.fc2 = nn.Linear(128, 10)
 
@@ -107,7 +106,6 @@ def train(train_loader,model,criterion,optimizer,epoch,device):
             batch_time.update(time.perf_counter() - t)
             t = time.perf_counter()
             progress.display(batch_idx)
-    return train_loss.avg, train_acc.avg
 
 def validate(val_loader,model,criterion,device):
     val_loss = AverageMeter('Loss', ':.6f')
@@ -128,7 +126,6 @@ def validate(val_loader,model,criterion,device):
         acc = 100. * pred.eq(target.data).cpu().sum() / target.size(0)
         val_acc.update(acc, data.size(0))
     progress.display(len(val_loader))
-    return val_loss.avg, val_acc.avg
 
 def main():
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
@@ -149,9 +146,9 @@ def main():
     ngpus = torch.cuda.device_count()
     device = torch.device('cuda',rank % ngpus)
 
-    if rank==0:
-        wandb.init()
-        wandb.config.update(args)
+    epochs = args.epochs
+    batch_size = args.bs
+    learning_rate = args.lr
 
     train_dataset = datasets.MNIST('./data',
                                    train=True,
@@ -165,29 +162,20 @@ def main():
         num_replicas=dist.get_world_size(),
         rank=dist.get_rank())
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                               batch_size=args.bs,
+                                               batch_size=batch_size,
                                                sampler=train_sampler)
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
-                                             batch_size=args.bs,
+                                             batch_size=batch_size,
                                              shuffle=False)
     model = CNN().to(device)
-    if rank==0:
-        wandb.config.update({"model": model.__class__.__name__, "dataset": "MNIST"})
     model = DDP(model, device_ids=[rank % ngpus])
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
-    for epoch in range(args.epochs):
+    for epoch in range(epochs):
         model.train()
-        train_loss, train_acc = train(train_loader,model,criterion,optimizer,epoch,device)
-        val_loss, val_acc = validate(val_loader,model,criterion,device)
-        if rank==0:
-            wandb.log({
-                'train_loss': train_loss,
-                'train_acc': train_acc,
-                'val_loss': val_loss,
-                'val_acc': val_acc
-                })
+        train(train_loader,model,criterion,optimizer,epoch,device)
+        validate(val_loader,model,criterion,device)
 
     dist.destroy_process_group()
 

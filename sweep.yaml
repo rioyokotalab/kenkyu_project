@@ -1,4 +1,4 @@
-program: wrapper.py
+program: 14_regularization.py
 method: grid
 metric:
   goal: minimize

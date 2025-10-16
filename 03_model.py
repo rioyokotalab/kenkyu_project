@@ -43,8 +43,10 @@ for epoch in range(epochs):
     print(epoch, loss.item())
 
     # backward pass
-    optimizer.zero_grad()
+    model.zero_grad()
     loss.backward()
 
-    # update weights
-    optimizer.step()
+    with torch.no_grad():
+        # update weights
+        for param in model.parameters():
+            param -= learning_rate * param.grad
