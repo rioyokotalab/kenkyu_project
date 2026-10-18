@@ -1,22 +1,15 @@
-"""11_wandb.py — Weights & Biases で実験を記録する。
+"""11_wandb.py — 10 + Weights & Biases で実験を記録する。
 
 学ぶこと:
-- 学習曲線（loss・perplexity）と実験条件（config）を自動で記録・比較する。
-- 生成テキストのサンプルを wandb.Table に残し、数値だけでなく「出力の質」も追う。
-- compute ノードは外部ネットに出られないことがあるので、その場合は offline にする。
+- 学習曲線（loss・perplexity）と実験条件（args）を自動で記録し、Web で比較する。
+- 生成テキストも wandb.Table に残し、数値だけでなく「出力の質」を追う。
 
-準備:
-    uv pip install wandb
-    wandb login                      # 初回のみ
-TSUBAME の計算ノードでネットに出られない場合:
-    export WANDB_MODE=offline        # ジョブ後に `wandb sync` でアップロード
-
-使い方:  python 11_wandb.py
+準備:  uv pip install wandb && wandb login
+計算ノードが外部ネットに出られないとき:  export WANDB_MODE=offline  → 後で wandb sync
 """
-from __future__ import annotations
-
+import argparse
 import math
-import os
+import time
 
 import torch
 import wandb
@@ -24,23 +17,52 @@ import wandb
 from data_utils import get_batch, load_dataset
 from gpt import GPT, GPTConfig
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--max_iters", type=int, default=2000)
+parser.add_argument("--eval_interval", type=int, default=200)
+parser.add_argument("--eval_iters", type=int, default=50)
+parser.add_argument("--batch_size", type=int, default=32)
+parser.add_argument("--lr", type=float, default=3e-4)
+parser.add_argument("--block_size", type=int, default=64)
+parser.add_argument("--n_layer", type=int, default=4)
+parser.add_argument("--n_head", type=int, default=4)
+parser.add_argument("--n_embd", type=int, default=128)
+parser.add_argument("--dropout", type=float, default=0.1)
+parser.add_argument("--seed", type=int, default=1337)
+args = parser.parse_args()
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
-torch.manual_seed(1337)
+torch.manual_seed(args.seed)
+cfg = GPTConfig(block_size=args.block_size, n_layer=args.n_layer, n_head=args.n_head,
+                n_embd=args.n_embd, dropout=args.dropout)
 
-WANDB_ENTITY = "rioyokotalab"
-WANDB_PROJECT = "kenkyu_project"
 
-max_iters, eval_interval, batch_size, lr = 3000, 500, 32, 3e-4
-cfg = GPTConfig(block_size=128, n_layer=4, n_head=4, n_embd=192, dropout=0.1)
+class AverageMeter:
+    """値の移動平均を保持する。update(val) で更新、avg で平均。"""
+
+    def __init__(self, name):
+        self.name, self.sum, self.count, self.val = name, 0.0, 0, 0.0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+
+    @property
+    def avg(self):
+        return self.sum / max(self.count, 1)
+
+    def __str__(self):
+        return f"{self.name} {self.val:.4f} (avg {self.avg:.4f})"
 
 
 @torch.no_grad()
-def eval_loss(model, data, iters=50):
+def estimate_loss(model, data):
     model.eval()
-    losses = torch.zeros(iters)
-    for k in range(iters):
-        x, y = get_batch(data, cfg.block_size, batch_size, device)
-        _, loss = model(x, y)
+    losses = torch.zeros(args.eval_iters)
+    for k in range(args.eval_iters):
+        x, y = get_batch(data, cfg.block_size, args.batch_size, device)
+        _, loss, _ = model(x, y)
         losses[k] = loss.item()
     model.train()
     return losses.mean().item()
@@ -50,27 +72,37 @@ def main():
     train_data, val_data, tok = load_dataset()
     cfg.vocab_size = tok.vocab_size
     model = GPT(cfg).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=lr)
-
-    wandb.init(entity=WANDB_ENTITY, project=WANDB_PROJECT,
-               config={**cfg.__dict__, "lr": lr, "batch_size": batch_size})
+    print(f"device={device}  params={model.num_params():,}  args={vars(args)}")
+    opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    train_loss = AverageMeter("loss")
+    wandb.init(entity="rioyokotalab", project="kenkyu_project", config=vars(args))
     samples = wandb.Table(columns=["step", "sample"])
 
-    for it in range(max_iters + 1):
-        if it % eval_interval == 0:
-            tr, va = eval_loss(model, train_data), eval_loss(model, val_data)
+    if device == "cuda":
+        torch.cuda.synchronize()
+    t0 = time.perf_counter()
+    for it in range(args.max_iters + 1):
+        if it % args.eval_interval == 0:
+            tr, va = estimate_loss(model, train_data), estimate_loss(model, val_data)
+            print(f"[{it:5d}/{args.max_iters}]  {train_loss}  "
+                  f"train {tr:.4f}  val {va:.4f}  val_ppl {math.exp(va):.2f}")
+            wandb.log({"step": it, "train_loss": tr, "val_loss": va, "val_ppl": math.exp(va)})
             start = torch.zeros((1, 1), dtype=torch.long, device=device)
-            text = tok.decode(model.generate(start, 200, temperature=0.8, top_k=50)[0].tolist())
-            samples.add_data(it, text)
-            wandb.log({"train_loss": tr, "val_loss": va,
-                       "val_ppl": math.exp(min(va, 20)), "step": it})
-            print(f"step {it:4d}  train {tr:.4f}  val {va:.4f}")
-        x, y = get_batch(train_data, cfg.block_size, batch_size, device)
-        _, loss = model(x, y)
+            samples.add_data(it, tok.decode(model.generate(start, 200, top_k=50)[0].tolist()))
+            train_loss = AverageMeter("loss")
+        x, y = get_batch(train_data, cfg.block_size, args.batch_size, device)
+        _, loss, _ = model(x, y)
+        train_loss.update(loss.item())
         opt.zero_grad(set_to_none=True)
         loss.backward()
         opt.step()
+    if device == "cuda":
+        torch.cuda.synchronize()
+    dt = time.perf_counter() - t0
+    print(f"{args.max_iters} step: {dt:.1f}s  {args.max_iters * args.batch_size * cfg.block_size / dt:,.0f} tokens/sec")
 
+    start = torch.zeros((1, 1), dtype=torch.long, device=device)
+    print(tok.decode(model.generate(start, 500, temperature=1.0, top_k=50)[0].tolist()))
     wandb.log({"samples": samples})
     wandb.finish()
 

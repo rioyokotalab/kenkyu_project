@@ -10,6 +10,7 @@
 
 source ~/.bash_profile
 activate pytorch
+export PYTHONUNBUFFERED=1   # print をすぐ出力に出す
 
 # export WANDB_MODE=offline   # 計算ノードが外部ネット不可のとき
 

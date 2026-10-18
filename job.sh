@@ -10,6 +10,7 @@
 
 source ~/.bash_profile
 activate pytorch
+export PYTHONUNBUFFERED=1   # print をすぐ出力に出す（バッファされると途中経過が見えない）
 
 # 計算ノードが外部ネットに出られない場合は offline にして、ジョブ後に `wandb sync` する。
 # export WANDB_MODE=offline
