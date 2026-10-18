@@ -89,10 +89,11 @@ qsub -g tga-hpc-lecture job_ddp.sh
 `14_ddp.py` を `sweep.yaml` で探索し、**検証 perplexity（val_ppl）をできるだけ下げる**。
 
 ```bash
-wandb login
-wandb sweep sweep.yaml                   # 表示される sweep ID を控える
+activate pytorch
+wandb login                              # 初回のみ（https://wandb.ai/authorize のキーを貼る）
+wandb sweep sweep.yaml                   # 表示される「wandb agent <自分のID>/kenkyu_project/<SWEEP_ID>」を控える
 mkdir -p output
-qsub -g tga-hpc-lecture job.sh rioyokotalab/kenkyu_project/<SWEEP_ID>   # 複数投げると並列に探索
+qsub -g tga-hpc-lecture job.sh <自分のID>/kenkyu_project/<SWEEP_ID>   # 複数投げると並列に探索
 ```
 
 提出物（wandb のレポート 1 枚、締切は授業で案内）:

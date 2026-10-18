@@ -17,6 +17,12 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+# SDPA の cuDNN バックエンドは使わない（Flash Attention カーネルを使う）。
+# クラスタでは module が古い cuDNN を LD_LIBRARY_PATH に載せていることがあり、
+# pip の torch が同梱する cuDNN と食い違って実行時エラーになるため。
+if torch.cuda.is_available() and hasattr(torch.backends.cuda, "enable_cudnn_sdp"):
+    torch.backends.cuda.enable_cudnn_sdp(False)
+
 
 @dataclass
 class GPTConfig:
