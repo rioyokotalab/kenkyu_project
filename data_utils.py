@@ -11,7 +11,7 @@ import torch
 
 DATA_URL = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
 DATA_PATH = "input.txt"
-JA_URL = "https://raw.githubusercontent.com/aozorabunko/aozorabunko/master/cards/000148/files/789_ruby_5639.zip"
+JA_URL = "https://www.aozora.gr.jp/cards/000148/files/789_ruby_5639.zip"
 JA_PATH = "japanese.txt"
 
 
@@ -22,7 +22,8 @@ def _download_japanese(path: str) -> None:
     import zipfile
 
     print(f"{path} が無いので青空文庫（夏目漱石「吾輩は猫である」）をダウンロードします")
-    data = urllib.request.urlopen(JA_URL).read()
+    req = urllib.request.Request(JA_URL, headers={"User-Agent": "kenkyu-project"})
+    data = urllib.request.urlopen(req).read()
     zf = zipfile.ZipFile(io.BytesIO(data))
     raw = zf.read(zf.namelist()[0]).decode("cp932")
     body = re.split(r"-{20,}\r?\n", raw)[-1]          # 冒頭の注記ブロックを捨てる

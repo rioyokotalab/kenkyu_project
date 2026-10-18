@@ -22,7 +22,6 @@
 1. Tokyo Tech portal → TSUBAME4 portal でアカウント作成、SSH 鍵（`ssh-keygen -t ed25519`）を登録
 2. `~/.bash_profile` に追記して `source ~/.bash_profile`:
    ```bash
-   module load nvhpc nccl
    export PATH=/gs/bs/tga-hpc-lecture/$USER/.local/bin:$PATH
    export PYTHONUSERBASE=/gs/bs/tga-hpc-lecture/$USER/.local
    export UV_CACHE_DIR=/gs/bs/tga-hpc-lecture/$USER/.cache/uv
