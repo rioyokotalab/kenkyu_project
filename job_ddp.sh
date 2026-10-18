@@ -14,4 +14,4 @@ export PYTHONUNBUFFERED=1   # print をすぐ出力に出す
 
 # export WANDB_MODE=offline   # 計算ノードが外部ネット不可のとき
 
-torchrun --standalone --nproc_per_node=4 14_ddp.py --max_iters 5000 --batch_size 32
+torchrun --standalone --nproc_per_node=4 14_ddp.py --tokenizer char --block_size 256 --n_layer 6 --n_head 6 --n_embd 384 --max_iters 3000 --batch_size 32
