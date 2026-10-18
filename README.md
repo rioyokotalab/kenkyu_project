@@ -121,7 +121,8 @@ Claude / Copilot 等の利用は歓迎します。ただし **AI の出力は必
 | `-l node_f=1` | ノード 1 台 = H100 4 枚（`job_ddp.sh`） |
 
 H100 1 枚での実測（2026-10-18）: 08_gpu（0.8M params, block 64）2000 step 21.3 秒 ≈ 192,000 tokens/sec（実行ごとに 1〜2 割変動）、
-GPU メモリ最大 0.17 GB。13_amp（10.7M params, block 256, bf16+Flash）≈ 176,000 tokens/sec。
+GPU メモリ最大 0.17 GB。13_amp（block 256, n_embd 384, bf16+Flash, BPE）≈ 159,000 tokens/sec。
+node_f=1（H100 ×4）で `qsub job_ddp.sh`（10.7M params, char, block 256, 3000 step）35.3 秒 ≈ 278 万 tokens/sec（全 GPU 合計）。
 `--compile` は 500 step の短い実行ではコンパイル時間が勝って遅くなる（長い学習で効く）。
 
 ## 困ったとき
