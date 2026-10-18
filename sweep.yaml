@@ -1,16 +1,29 @@
-program: 14_regularization.py
-method: grid
+# wandb のハイパーパラメータ探索（sweep）。課題で使う。
+#
+# 使い方:
+#   wandb sweep sweep.yaml           # sweep を作成（表示される sweep ID を控える）
+#   qsub -g tga-hpc-lecture job.sh <ENTITY/kenkyu_project/SWEEP_ID>   # エージェントを投入
+#
+# method は bayes（少ない試行で良い組み合わせを探す）。grid にすると全組み合わせを試す。
+program: 14_ddp.py
+method: bayes
 metric:
+  name: val_ppl
   goal: minimize
-  name: val_loss
 parameters:
-  epochs:
-    values: [100]
-  batch_size:
-    values: [32]
-  learning_rate:
-    values: [0.005, 0.01, 0.02, 0.05, 0.1]
-  momentum:
-    values: [0.85, 0.9, 0.95]
-  weight_decay:
-    values: [1.0e-4, 2.0e-4, 5.0e-4, 1.0e-3, 2.0e-3]
+  lr:
+    distribution: log_uniform_values
+    min: 1.0e-4
+    max: 3.0e-3
+  n_layer:
+    values: [4, 6, 8]
+  n_head:
+    values: [4, 6, 8]
+  n_embd:
+    values: [192, 384]
+  block_size:
+    values: [128, 256]
+  dropout:
+    values: [0.0, 0.1, 0.2]
+  max_iters:
+    value: 3000

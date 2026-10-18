@@ -1,0 +1,18 @@
+[project]
+name = "kenkyu-project"
+version = "2026.0.0"
+description = "研究プロジェクト（横田研究室）: 小さな言語モデルを一から作り、TSUBAME で学習する"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.4",
+    "numpy>=1.26",
+    "tiktoken>=0.7",
+    "wandb>=0.17",
+]
+
+# インストール（TSUBAME, uv 環境）:
+#   module load nvhpc nccl
+#   uv venv $UV_VENV_ROOT/pytorch -p 3.10 && activate pytorch
+#   uv pip install -e .
+#
+# バージョンを固定して全員の環境を揃える。torch は TSUBAME の CUDA に合うビルドを使う。

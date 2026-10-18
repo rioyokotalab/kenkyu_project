@@ -1,195 +1,79 @@
-import argparse
-import torch
-import torch.distributed as dist
-import torch.nn as nn
-import torch.nn.functional as F
-from torchvision import datasets, transforms
-from torch.nn.parallel import DistributedDataParallel as DDP
-import time
+"""11_wandb.py — Weights & Biases で実験を記録する。
+
+学ぶこと:
+- 学習曲線（loss・perplexity）と実験条件（config）を自動で記録・比較する。
+- 生成テキストのサンプルを wandb.Table に残し、数値だけでなく「出力の質」も追う。
+- compute ノードは外部ネットに出られないことがあるので、その場合は offline にする。
+
+準備:
+    uv pip install wandb
+    wandb login                      # 初回のみ
+TSUBAME の計算ノードでネットに出られない場合:
+    export WANDB_MODE=offline        # ジョブ後に `wandb sync` でアップロード
+
+使い方:  python 11_wandb.py
+"""
+from __future__ import annotations
+
+import math
 import os
+
+import torch
 import wandb
 
-def print0(message):
-    if dist.is_initialized():
-        if dist.get_rank() == 0:
-            print(message, flush=True)
-    else:
-        print(message, flush=True)
+from data_utils import get_batch, load_dataset
+from gpt import GPT, GPTConfig
 
-class CNN(nn.Module):
-    def __init__(self):
-        super(CNN, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, 3, 1)
-        self.conv2 = nn.Conv2d(32, 64, 3, 1)
-        self.dropout1 = nn.Dropout(0.25)
-        self.dropout2 = nn.Dropout(0.5)
-        self.fc1 = nn.Linear(9216, 128)
-        self.fc2 = nn.Linear(128, 10)
+device = "cuda" if torch.cuda.is_available() else "cpu"
+torch.manual_seed(1337)
 
-    def forward(self, x):
-        x = self.conv1(x)
-        x = F.relu(x)
-        x = self.conv2(x)
-        x = F.relu(x)
-        x = F.max_pool2d(x, 2)
-        x = self.dropout1(x)
-        x = torch.flatten(x, 1)
-        x = self.fc1(x)
-        x = F.relu(x)
-        x = self.dropout2(x)
-        x = self.fc2(x)
-        output = F.log_softmax(x, dim=1)
-        return output
+WANDB_ENTITY = "rioyokotalab"
+WANDB_PROJECT = "kenkyu_project"
 
-class AverageMeter(object):
-    def __init__(self, name, fmt=':f'):
-        self.name = name
-        self.fmt = fmt
-        self.reset()
+max_iters, eval_interval, batch_size, lr = 3000, 500, 32, 3e-4
+cfg = GPTConfig(block_size=128, n_layer=4, n_head=4, n_embd=192, dropout=0.1)
 
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
 
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-    def __str__(self):
-        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
-        return fmtstr.format(**self.__dict__)
-
-class ProgressMeter(object):
-    def __init__(self, num_batches, meters, prefix="", postfix=""):
-        self.batch_fmtstr = self._get_batch_fmtstr(num_batches)
-        self.meters = meters
-        self.prefix = prefix
-        self.postfix = postfix
-
-    def display(self, batch):
-        entries = [self.prefix + self.batch_fmtstr.format(batch)]
-        entries += [str(meter) for meter in self.meters]
-        entries += self.postfix
-        print0('\t'.join(entries))
-
-    def _get_batch_fmtstr(self, num_batches):
-        num_digits = len(str(num_batches // 1))
-        fmt = '{:' + str(num_digits) + 'd}'
-        return '[' + fmt + '/' + fmt.format(num_batches) + ']'
-
-def train(train_loader,model,criterion,optimizer,epoch,device):
-    batch_time = AverageMeter('Time', ':.4f')
-    train_loss = AverageMeter('Loss', ':.6f')
-    train_acc = AverageMeter('Accuracy', ':.6f')
-    progress = ProgressMeter(
-        len(train_loader),
-        [train_loss, train_acc, batch_time],
-        prefix="Epoch: [{}]".format(epoch))
-    model.train()
-    t = time.perf_counter()
-    for batch_idx, (data, target) in enumerate(train_loader):
-        data = data.to(device)
-        target = target.to(device)
-        output = model(data)
-        loss = criterion(output, target)
-        train_loss.update(loss.item(), data.size(0))
-        pred = output.data.max(1)[1]
-        acc = 100. * pred.eq(target.data).cpu().sum() / target.size(0)
-        train_acc.update(acc, data.size(0))
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        if batch_idx % 200 == 0:
-            batch_time.update(time.perf_counter() - t)
-            t = time.perf_counter()
-            progress.display(batch_idx)
-    return train_loss.avg, train_acc.avg
-
-def validate(val_loader,model,criterion,device):
-    val_loss = AverageMeter('Loss', ':.6f')
-    val_acc = AverageMeter('Accuracy', ':.1f')
-    progress = ProgressMeter(
-        len(val_loader),
-        [val_loss, val_acc],
-        prefix='\nValidation: ',
-        postfix='\n')
+@torch.no_grad()
+def eval_loss(model, data, iters=50):
     model.eval()
-    for data, target in val_loader:
-        data = data.to(device)
-        target = target.to(device)
-        output = model(data)
-        loss = criterion(output, target)
-        val_loss.update(loss.item(), data.size(0))
-        pred = output.data.max(1)[1]
-        acc = 100. * pred.eq(target.data).cpu().sum() / target.size(0)
-        val_acc.update(acc, data.size(0))
-    progress.display(len(val_loader))
-    return val_loss.avg, val_acc.avg
+    losses = torch.zeros(iters)
+    for k in range(iters):
+        x, y = get_batch(data, cfg.block_size, batch_size, device)
+        _, loss = model(x, y)
+        losses[k] = loss.item()
+    model.train()
+    return losses.mean().item()
+
 
 def main():
-    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--bs', '--batch_size', type=int, default=32, metavar='N',
-                        help='input batch size for training (default: 32)')
-    parser.add_argument('--epochs', type=int, default=10, metavar='N',
-                        help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', '--learning_rate', type=float, default=1.0e-02, metavar='LR',
-                        help='learning rate (default: 1.0e-02)')
-    args = parser.parse_args()
+    train_data, val_data, tok = load_dataset()
+    cfg.vocab_size = tok.vocab_size
+    model = GPT(cfg).to(device)
+    opt = torch.optim.AdamW(model.parameters(), lr=lr)
 
-    master_addr = os.getenv("MASTER_ADDR", default="localhost")
-    master_port = os.getenv('MASTER_PORT', default='8888')
-    method = "tcp://{}:{}".format(master_addr, master_port)
-    rank = int(os.getenv('OMPI_COMM_WORLD_RANK', '0'))
-    world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', '1'))
-    dist.init_process_group("nccl", init_method=method, rank=rank, world_size=world_size)
-    ngpus = torch.cuda.device_count()
-    device = torch.device('cuda',rank % ngpus)
+    wandb.init(entity=WANDB_ENTITY, project=WANDB_PROJECT,
+               config={**cfg.__dict__, "lr": lr, "batch_size": batch_size})
+    samples = wandb.Table(columns=["step", "sample"])
 
-    if rank==0:
-        wandb.init()
-        wandb.config.update(args)
+    for it in range(max_iters + 1):
+        if it % eval_interval == 0:
+            tr, va = eval_loss(model, train_data), eval_loss(model, val_data)
+            start = torch.zeros((1, 1), dtype=torch.long, device=device)
+            text = tok.decode(model.generate(start, 200, temperature=0.8, top_k=50)[0].tolist())
+            samples.add_data(it, text)
+            wandb.log({"train_loss": tr, "val_loss": va,
+                       "val_ppl": math.exp(min(va, 20)), "step": it})
+            print(f"step {it:4d}  train {tr:.4f}  val {va:.4f}")
+        x, y = get_batch(train_data, cfg.block_size, batch_size, device)
+        _, loss = model(x, y)
+        opt.zero_grad(set_to_none=True)
+        loss.backward()
+        opt.step()
 
-    train_dataset = datasets.MNIST('./data',
-                                   train=True,
-                                   download=True,
-                                   transform=transforms.ToTensor())
-    val_dataset = datasets.MNIST('./data',
-                                 train=False,
-                                 transform=transforms.ToTensor())
-    train_sampler = torch.utils.data.distributed.DistributedSampler(
-        train_dataset,
-        num_replicas=dist.get_world_size(),
-        rank=dist.get_rank())
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                               batch_size=args.bs,
-                                               sampler=train_sampler)
-    val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
-                                             batch_size=args.bs,
-                                             shuffle=False)
-    model = CNN().to(device)
-    if rank==0:
-        wandb.config.update({"model": model.__class__.__name__, "dataset": "MNIST"})
-    model = DDP(model, device_ids=[rank % ngpus])
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr)
+    wandb.log({"samples": samples})
+    wandb.finish()
 
-    for epoch in range(args.epochs):
-        model.train()
-        train_loss, train_acc = train(train_loader,model,criterion,optimizer,epoch,device)
-        val_loss, val_acc = validate(val_loader,model,criterion,device)
-        if rank==0:
-            wandb.log({
-                'train_loss': train_loss,
-                'train_acc': train_acc,
-                'val_loss': val_loss,
-                'val_acc': val_acc
-                })
 
-    dist.destroy_process_group()
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

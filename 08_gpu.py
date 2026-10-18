@@ -1,96 +1,59 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torchvision import datasets, transforms
+"""08_gpu.py — GPU を使い、学習速度（tokens/sec）を測る。
+
+学ぶこと:
+- model と data を device('cuda') に送れば、計算は自動的に GPU で行われる。
+- スループット（tokens/sec）という、研究で最重要の指標の測り方。
+- GPU の同期（torch.cuda.synchronize）を忘れると時間を正しく測れないこと。
+
+試すこと:
+- batch_size / block_size を変えて tokens/sec と GPU メモリ使用量がどう動くか。
+"""
+from __future__ import annotations
+
 import time
 
-class CNN(nn.Module):
-    def __init__(self):
-        super(CNN, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, 3, 1)
-        self.conv2 = nn.Conv2d(32, 64, 3, 1)
-        self.dropout1 = nn.Dropout(0.25)
-        self.dropout2 = nn.Dropout(0.5)
-        self.fc1 = nn.Linear(9216, 128)
-        self.fc2 = nn.Linear(128, 10)
+import torch
 
-    def forward(self, x):
-        x = self.conv1(x)
-        x = F.relu(x)
-        x = self.conv2(x)
-        x = F.relu(x)
-        x = F.max_pool2d(x, 2)
-        x = self.dropout1(x)
-        x = torch.flatten(x, 1)
-        x = self.fc1(x)
-        x = F.relu(x)
-        x = self.dropout2(x)
-        x = self.fc2(x)
-        output = F.log_softmax(x, dim=1)
-        return output
+from data_utils import get_batch, load_dataset
+from gpt import GPT, GPTConfig
 
-def train(train_loader,model,criterion,optimizer,epoch,device):
-    model.train()
-    t = time.perf_counter()
-    for batch_idx, (data, target) in enumerate(train_loader):
-        data = data.to(device)
-        target = target.to(device)
-        output = model(data)
-        loss = criterion(output, target)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        if batch_idx % 200 == 0:
-            print('Train Epoch: {} [{:>5}/{} ({:.0%})]\tLoss: {:.6f}\t Time:{:.4f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                batch_idx / len(train_loader), loss.data.item(),
-                time.perf_counter() - t))
-            t = time.perf_counter()
+device = "cuda" if torch.cuda.is_available() else "cpu"
+torch.manual_seed(0)
 
-def validate(val_loader,model,criterion,device):
-    model.eval()
-    val_loss, val_acc = 0, 0
-    for data, target in val_loader:
-        data = data.to(device)
-        target = target.to(device)
-        output = model(data)
-        loss = criterion(output, target)
-        val_loss += loss.item()
-        pred = output.data.max(1)[1]
-        val_acc += 100. * pred.eq(target.data).cpu().sum() / target.size(0)
+batch_size = 32
+cfg = GPTConfig(block_size=256, n_layer=6, n_head=6, n_embd=384, dropout=0.0)
 
-    val_loss /= len(val_loader)
-    val_acc /= len(val_loader)
-    print('\nValidation set: Average loss: {:.4f}, Accuracy: {:.1f}%\n'.format(
-        val_loss, val_acc))
 
 def main():
-    epochs = 10
-    batch_size = 32
-    learning_rate = 1.0e-02
+    train_data, _, tok = load_dataset()
+    cfg.vocab_size = tok.vocab_size
+    model = GPT(cfg).to(device)
+    opt = torch.optim.AdamW(model.parameters(), lr=3e-4)
+    print(f"device={device}  params={model.num_params():,}")
+    if device == "cuda":
+        print("GPU:", torch.cuda.get_device_name())
 
-    train_dataset = datasets.MNIST('./data',
-                                   train=True,
-                                   download=True,
-                                   transform=transforms.ToTensor())
-    val_dataset = datasets.MNIST('./data',
-                                 train=False,
-                                 transform=transforms.ToTensor())
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                               batch_size=batch_size,
-                                               shuffle=True)
-    val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
-                                             batch_size=batch_size,
-                                             shuffle=False)
-    device = torch.device("cuda")
-    model = CNN().to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    warmup, measure = 5, 20
+    for step in range(warmup + measure):
+        if step == warmup and device == "cuda":
+            torch.cuda.synchronize()
+            t0 = time.perf_counter()
+        x, y = get_batch(train_data, cfg.block_size, batch_size, device)
+        _, loss = model(x, y)
+        opt.zero_grad(set_to_none=True)
+        loss.backward()
+        opt.step()
+    if device == "cuda":
+        torch.cuda.synchronize()
+    else:
+        t0 = time.perf_counter() - 0  # CPU 近似
+    dt = time.perf_counter() - t0
+    tokens = measure * batch_size * cfg.block_size
+    print(f"{measure} step: {dt:.3f}s  ->  {tokens / dt:,.0f} tokens/sec")
+    if device == "cuda":
+        print(f"GPU メモリ最大: {torch.cuda.max_memory_allocated() / 1e9:.2f} GB")
+    print("ヒント: 時間計測の前後で cuda.synchronize() を呼ぶ（GPU は非同期実行のため）。")
 
-    for epoch in range(epochs):
-        model.train()
-        train(train_loader,model,criterion,optimizer,epoch,device)
-        validate(val_loader,model,criterion,device)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -1,38 +1,34 @@
+"""02_autograd.py — PyTorch の自動微分。
+
+学ぶこと:
+- requires_grad=True のテンソルに対して、loss.backward() が勾配を自動計算する。
+- 00 で手で書いた逆伝播を、PyTorch が全部やってくれることを確認する。
+"""
 import torch
 
-epochs = 300
-batch_size = 32
-D_in = 784
-H = 100
-D_out = 10
-learning_rate = 1.0e-06
+torch.manual_seed(0)
 
-# create random input and output data
+batch_size, D_in, H, D_out = 32, 16, 64, 8
+lr = 1e-3
+epochs = 200
+
 x = torch.randn(batch_size, D_in)
 y = torch.randn(batch_size, D_out)
-
-# randomly initialize weights
-w1 = torch.randn(D_in, H, requires_grad=True)
-w2 = torch.randn(H, D_out, requires_grad=True)
+w1 = (torch.randn(D_in, H) * 0.1).requires_grad_(True)
+w2 = (torch.randn(H, D_out) * 0.1).requires_grad_(True)
 
 for epoch in range(epochs):
-    # forward pass: compute predicted y
-    h = x.mm(w1)
-    h_r = h.clamp(min=0)
-    y_p = h_r.mm(w2)
+    y_pred = x.mm(w1).clamp(min=0).mm(w2)   # 順伝播（00 と同じ 2 層 ReLU）
+    loss = (y_pred - y).pow(2).mean()
 
-    # compute and print loss
-    loss = (y_p - y).pow(2).sum()
-    print(epoch, loss.item())
-
-    # backward pass
-    loss.backward()
-
+    loss.backward()                         # ← 逆伝播は自動。w1.grad, w2.grad に勾配が入る
     with torch.no_grad():
-        # update weights
-        w1 -= learning_rate * w1.grad
-        w2 -= learning_rate * w2.grad
-
-        # initialize weights
-        w1.grad.zero_()
+        w1 -= lr * w1.grad
+        w2 -= lr * w2.grad
+        w1.grad.zero_()                     # 勾配は累積されるので毎回ゼロに戻す
         w2.grad.zero_()
+
+    if epoch % 20 == 0:
+        print(f"epoch {epoch:3d}  loss {loss.item():.4f}")
+
+print("backward() が 00 の grad_w1 / grad_w2 を自動で計算している。")
