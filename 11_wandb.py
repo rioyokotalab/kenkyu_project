@@ -75,7 +75,7 @@ def main():
     print(f"device={device}  params={model.num_params():,}  args={vars(args)}")
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
     train_loss = AverageMeter("loss")
-    wandb.init(entity="rioyokotalab", project="kenkyu_project", config=vars(args))
+    wandb.init(project="kenkyu_project", config=vars(args))
     samples = wandb.Table(columns=["step", "sample"])
 
     if device == "cuda":

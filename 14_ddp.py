@@ -101,7 +101,7 @@ def main():
     if master:
         print(f"world_size={world_size}  device={device}  bf16={use_bf16}  "
               f"params={raw_model.num_params():,}  args={vars(args)}")
-        wandb.init(entity="rioyokotalab", project="kenkyu_project", config=vars(args))
+        wandb.init(project="kenkyu_project", config=vars(args))
         samples = wandb.Table(columns=["step", "sample"])
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
     train_loss = AverageMeter("loss")
