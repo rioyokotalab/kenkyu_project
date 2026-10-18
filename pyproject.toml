@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-py_modules = ["gpt", "data_utils"]
+py-modules = ["gpt", "data_utils"]
 
 # インストール（TSUBAME, uv 環境）:
 #   module load nvhpc nccl
