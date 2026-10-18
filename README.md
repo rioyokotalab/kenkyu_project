@@ -63,7 +63,7 @@
 | `11_wandb.py` | 10 + Weights & Biases（学習曲線・生成例の記録） |
 | `12_bpe.py` | 11 + BPE トークナイザ（tiktoken）。`--tokenizer bpe --data japanese.txt` で日本語も |
 | `13_amp.py` | 12 + bf16・Flash Attention・torch.compile・勾配累積・KV-cache |
-| `14_ddp.py` | 13 + 分散データ並列（torchrun）。**課題と sweep の本体** |
+| `14_ddp.py` | 13 + 分散データ並列（torchrun、`node_f=1` で 4 GPU）。**課題と sweep の本体** |
 
 ### 動かし方
 
@@ -77,7 +77,7 @@ activate pytorch
 python 08_gpu.py
 python 09_args.py --n_layer 6 --n_embd 384 --block_size 256 --max_iters 5000
 
-# 1 ノード 4 GPU（バッチ）
+# 1 ノード 4 GPU（バッチ、node_f=1 = H100 ×4。node_q=1 は 1/4 ノード = GPU 1 枚）
 mkdir -p output
 qsub -g tga-hpc-lecture job_ddp.sh
 ```
@@ -107,6 +107,19 @@ qsub -g tga-hpc-lecture job.sh rioyokotalab/kenkyu_project/<SWEEP_ID>   # 複数
 
 Claude / Copilot 等の利用は歓迎します。ただし **AI の出力は必ず自分で読んで理解し、一次情報と実際の
 挙動で検証**してください（[`ai_assisted_coding.md`](ai_assisted_coding.md)）。レポートに AI を使った箇所を明記すること。
+
+## TSUBAME4 の資源指定（実機確認 2026-10-18）
+
+| 指定 | 内容 |
+| --- | --- |
+| `-l gpu_1=1` | GPU 1 枚（演習の基本。sweep の 1 試行もこれ） |
+| `-l node_q=1` | 1/4 ノード = GPU 1 枚（`gpu_1` と同じ枚数。CPU/メモリが多い） |
+| `-l node_h=1` | 1/2 ノード = GPU 2 枚 |
+| `-l node_f=1` | ノード 1 台 = H100 4 枚（`job_ddp.sh`） |
+
+H100 1 枚での実測（2026-10-18）: 08_gpu（0.8M params, block 64）2000 step 17.7 秒 ≈ 231,000 tokens/sec、
+GPU メモリ最大 0.17 GB。13_amp（10.7M params, block 256, bf16+Flash）≈ 176,000 tokens/sec。
+`--compile` は 500 step の短い実行ではコンパイル時間が勝って遅くなる（長い学習で効く）。
 
 ## 困ったとき
 
