@@ -10,6 +10,9 @@ dependencies = [
     "wandb>=0.17",
 ]
 
+[tool.setuptools]
+py_modules = ["gpt", "data_utils"]
+
 # インストール（TSUBAME, uv 環境）:
 #   module load nvhpc nccl
 #   uv venv $UV_VENV_ROOT/pytorch -p 3.10 && activate pytorch

@@ -27,10 +27,13 @@
    export PYTHONUSERBASE=/gs/bs/tga-hpc-lecture/$USER/.local
    export UV_CACHE_DIR=/gs/bs/tga-hpc-lecture/$USER/.cache/uv
    export UV_VENV_ROOT=/gs/bs/tga-hpc-lecture/$USER/venvs
+   export UV_CONCURRENT_INSTALLS=4    # ログインノードはプロセス数上限が小さい
    activate() { source $UV_VENV_ROOT/$1/bin/activate; }
    ```
 3. 環境を作る（一度だけ）:
    ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh    # uv を入れる
+   source ~/.bash_profile
    uv venv $UV_VENV_ROOT/pytorch -p 3.10
    activate pytorch
    cd /gs/bs/tga-hpc-lecture/$USER
